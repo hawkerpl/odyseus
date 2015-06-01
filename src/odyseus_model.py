@@ -2,17 +2,60 @@ import numpy as np
 import PIL.Image
 from matplotlib import transforms
 
+class OdyseusSensor(object):
+	radius = 30
+	pixel_sensor_range = 50
+
+	@classmethod
+	def create_position(cls, central_object_position, angle, alpha):
+		x0, y0 = central_object_position
+		x = x0 + OdyseusSensor.pixel_sensor_range
+		y = y0
+		t = transforms.Affine2D().rotate_deg_around(x0,y0,alpha+np.rad2deg(angle)).get_matrix()
+		x,y,_ = t.dot(np.array([x,y,1]).T)
+		return x,y
+
+	def __init__(self, central_object_position, angle, alpha):
+		x, y = OdyseusSensor.create_position(central_object_position, angle, alpha)
+		self.center = x,y
+		self.val = False
+
+	@property
+	def x(self):
+		return self.center[0]
+
+	@x.setter	
+	def x(self, value):
+		self.center[0] = value
+
+	@property
+	def y(self):
+		return self.center[1]
+
+	@y.setter	
+	def y(self, value):
+		self.center[1] = value
+
+
+
+
+
 class OdyseusModel(object):
-	def __init__(self,starting_point,starting_alpha = 0.0, v = 0.0,map_path=None,neural_net = None, radius=30, pixel_sensor_range=50, dt=20):
-		self.img = PIL.Image.open(r"F:\repozytoria\studia\ai\odyseusz\src\maps\simple2.png")
+	SensorClass = OdyseusSensor
+	sensor_angles = [90,45,0,-45,-90]
+	central_radius = 30
+
+	def __init__(self,starting_point,starting_alpha = 0.0, v = 0.0,map_path=None,neural_net = None, radius=15, pixel_sensor_range=50, dt=20):
+		self.img = PIL.Image.open(r"F:\repozytoria\studia\ai\odyseusz\src\maps\bw.png")
 		self.tab = np.array(self.img)
-		self.radius = radius
+		OdyseusModel.SensorClass.radius = radius
+		OdyseusModel.SensorClass.pixel_sensor_range = pixel_sensor_range
+		self.sensors = [OdyseusModel.SensorClass(starting_point,angle,starting_alpha) for angle in OdyseusModel.sensor_angles]
+		self.sensor_array = []
 		self.v = v
 		self.dt = dt
-		self.sensor_angles = [90,45,0,-45,-90]
 		self.position = starting_point
 		self.alpha = starting_alpha
-		self.pixel_sensor_range = pixel_sensor_range
 		if neural_net:
 			self.net = neural_net
 		else:
@@ -22,27 +65,29 @@ class OdyseusModel(object):
 	def random_net():
 		return None
 
-	def one_sensor_position(self,angle, position, alpha):
-	    x0,y0 = position
-	    x = x0 + self.pixel_sensor_range
-	    y = y0
-	    t = transforms.Affine2D().rotate_deg_around(x0,y0,angle+np.rad2deg(alpha)).get_matrix()
-	    x,y,_ = t.dot(np.array([x,y,1]).T)
-	    return x,y
+	@classmethod
+	def update_sensor_array_by_center(cls, sensors, central_object_position, alpha):
+		for sensor,angle in zip(sensors,cls.sensor_angles):
+			sensor.center = cls.SensorClass(central_object_position, alpha, angle).center
+		return sensors
 
-	def determine_sensor_signal(self,position):
-		x,y = position
-		value = self.tab[x,y,0]
+	def update_sensors(self):
+		self.sensors = OdyseusModel.update_sensor_array_by_center(self.sensors,self.position,self.alpha)
+		return self.sensors
+		
+
+	def determine_sensor_signal(self,sensor):
+		x,y = sensor.center
+		value = self.tab[y,x,0]
+		sensor.val = value
 		return value
 
+	def check_sensors(self):
+		[self.determine_sensor_signal(sensor) for sensor in self.sensors]
+		return self.sensors
 
-	def one_sensor_signal(self,angle, position, alpha):
-		position = self.one_sensor_position(angle, position, alpha)
-		signal = self.determine_sensor_signal(position)
-		return signal
-
-	def check_sensors(self, position, alpha):
-		return [self.one_sensor_signal(angle,position,alpha) for angle in self.sensor_angles]
+	def sensors_to_val_array(self):
+		return [s.val for s in self.sensors]
 
 	def net_step(self,sensor_array,v,alpha,i):
 		dv = 1#/self.dt
@@ -50,19 +95,18 @@ class OdyseusModel(object):
 		return dv, dalpha
 
 	def step(self,i):
-		sensor_array = self.check_sensors(self.position,self.alpha)
-		print sensor_array
-		dv, dalpha = self.net_step(sensor_array,self.v,self.alpha,i)
+		self.sensors = self.check_sensors()
+		self.sensor_array = self.sensors_to_val_array()
+		dv, dalpha = self.net_step(self.sensor_array,self.v,self.alpha,i)
 		self.alpha += dalpha
 		x,y = self.position
 		dx = np.cos(self.alpha)*dv#*self.dt
 		dy = np.sin(self.alpha)*dv#*self.dt
 		self.v += dv
-		
-		#print dx, dy, dv, dalpha
 		x = x+dx
 		y = y+dy
 		self.position = x, y
+		self.update_sensors()
 		return dx, dy, dalpha
 
 	def as_genom():
