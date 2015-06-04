@@ -2,6 +2,7 @@ import numpy as np
 import PIL.Image
 from matplotlib import transforms
 
+
 class OdyseusSensor(object):
 	radius = 30
 	pixel_sensor_range = 50
@@ -45,16 +46,28 @@ class OdyseusModel(object):
 	sensor_angles = [90,45,0,-45,-90]
 	central_radius = 30
 
-	def __init__(self,starting_point,starting_alpha = 0.0, v = 0.0,map_path=None,neural_net = None, radius=15, pixel_sensor_range=50, dt=20):
-		self.img = PIL.Image.open(r"F:\repozytoria\studia\ai\odyseusz\src\maps\bw.png")
+	def __init__(self, starting_point, destination,
+				starting_alpha = 0.0,
+				v = 0.0,
+				map_path=None,
+				neural_net = None,
+				radius=15,
+				pixel_sensor_range=50,
+				dt=20):
+		self.img = PIL.Image.open(map_path)
 		self.tab = np.array(self.img)
 		OdyseusModel.SensorClass.radius = radius
 		OdyseusModel.SensorClass.pixel_sensor_range = pixel_sensor_range
 		self.sensors = [OdyseusModel.SensorClass(starting_point,angle,starting_alpha) for angle in OdyseusModel.sensor_angles]
 		self.sensor_array = []
+		self.starting_v = v
+		self.starting_alpha = starting_alpha
 		self.v = v
 		self.dt = dt
+		self.net = neural_net
+		self.starting_position = starting_point
 		self.position = starting_point
+		self.destination = destination
 		self.alpha = starting_alpha
 		if neural_net:
 			self.net = neural_net
@@ -89,15 +102,31 @@ class OdyseusModel(object):
 	def sensors_to_val_array(self):
 		return [s.val for s in self.sensors]
 
-	def net_step(self,sensor_array,v,alpha,i):
-		dv = 1#/self.dt
-		dalpha = 0.01#1.0#/self.dt
+
+	def to_net_input(self):
+		net_input = self.sensors_to_val_array()
+		net_input.append(self.v)
+		net_input.append(self.alpha)
+		return net_input
+
+	def restrict_values(self, values):
+		dv, dalpha = values
+		dv_limit = 5
+		dalpha_limit = 5
+		if np.abs(dv) > dv_limit:
+			dv = np.sign(dv) * dv_limit
+		if np.abs(dalpha) > dalpha_limit:
+			dalpha = np.sign(dalpha) * dalpha_limit
 		return dv, dalpha
 
-	def step(self,i):
-		self.sensors = self.check_sensors()
-		self.sensor_array = self.sensors_to_val_array()
-		dv, dalpha = self.net_step(self.sensor_array,self.v,self.alpha,i)
+	def net_step(self,sensor_array,v,alpha,i):
+		net_input = self.to_net_input()
+		dv, dalpha = self.net.activate(net_input)
+		dv, dalpha = self.restrict_values((dv,dalpha))
+		return dv, dalpha
+
+	def do_action(self, action):
+		dv, dalpha = action/10000.0
 		self.alpha += dalpha
 		x,y = self.position
 		dx = np.cos(self.alpha)*dv#*self.dt
@@ -109,5 +138,29 @@ class OdyseusModel(object):
 		self.update_sensors()
 		return dx, dy, dalpha
 
+	def distance_to_destination(self):
+		x0, y0 = self.position
+		x1, y1 = self.destination
+		return np.sqrt((x0-x1)**2+(y0-y1)**2)
+
+	def step(self,i):
+		self.sensors = self.check_sensors()
+		self.sensor_array = self.sensors_to_val_array()
+		dv, dalpha = self.net_step(self.sensor_array,self.v,self.alpha,i)
+		self.do_action((dv, dalpha))
+		return dx, dy, dalpha
+
+	def reset(self):
+		self.tab = np.array(self.img)
+		self.sensors = [OdyseusModel.SensorClass(starting_point,angle,starting_alpha) for angle in OdyseusModel.sensor_angles]
+		self.sensor_array = []
+		self.v = self.starting_v
+		self.position = self.starting_position
+		self.alpha = self.starting_alpha
+		return self
+
 	def as_genom():
 		pass
+
+def first_model():
+	return OdyseusModel((200,100), (400, 100), map_path=r"F:\repozytoria\studia\ai\odyseusz\src\maps\bw.png")
