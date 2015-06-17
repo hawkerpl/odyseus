@@ -1,0 +1,7 @@
+c:\WinPython == 64bit
+c:\WinPython == 64bit
+c:\WinPython == 64bit
+Pillow == 2.8.2
+matplotlib == 1.4.3
+numpy == 1.9.2
+pybrain == 0.3.3
