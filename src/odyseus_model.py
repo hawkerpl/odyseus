@@ -1,6 +1,8 @@
 import numpy as np
 import PIL.Image
 from matplotlib import transforms
+from pybrain.structure import GaussianLayer
+from pybrain.tools.shortcuts import buildNetwork
 
 
 class OdyseusSensor(object):
@@ -74,7 +76,7 @@ class OdyseusModel(object):
 
     @staticmethod
     def random_net():
-        return None
+        return buildNetwork(7, 3, 2, bias=True, hiddenclass=GaussianLayer, outclass=GaussianLayer)
 
     @classmethod
     def update_sensor_array_by_center(cls, sensors, central_object_position, alpha):
@@ -117,14 +119,14 @@ class OdyseusModel(object):
             dalpha = np.sign(dalpha) * dalpha_limit
         return dv, dalpha
 
-    def net_step(self, sensor_array, v, alpha, i):
+    def net_step(self, i):
         net_input = self.to_net_input()
         dv, dalpha = self.net.activate(net_input)
         dv, dalpha = self.restrict_values((dv, dalpha))
         return dv, dalpha
 
     def do_action(self, action):
-        dv, dalpha = action / 10000.0
+        dv, dalpha = action #/ 10000.0
         self.alpha += dalpha
         x, y = self.position
         dx = np.cos(self.alpha) * dv  # *self.dt
@@ -144,9 +146,9 @@ class OdyseusModel(object):
     def step(self, i):
         self.sensors = self.check_sensors()
         self.sensor_array = self.sensors_to_val_array()
-        dv, dalpha = self.net_step(self.sensor_array, self.v, self.alpha, i)
+        dv, dalpha = self.net_step(i)
         self.do_action((dv, dalpha))
-        return dx, dy, dalpha
+        #return dx, dy, dalpha
 
     def reset(self):
         self.tab = np.array(self.img)
@@ -158,8 +160,6 @@ class OdyseusModel(object):
         self.alpha = self.starting_alpha
         return self
 
-    def as_genom():
-        pass
 
 
 def first_model():

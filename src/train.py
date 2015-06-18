@@ -1,6 +1,6 @@
 from pybrain.structure import LinearLayer, SigmoidLayer, FeedForwardNetwork
 from pybrain.structure import FullConnection
-from pybrain.tools.shortcuts import buildNetwork
+
 
 """
 def create_net():
