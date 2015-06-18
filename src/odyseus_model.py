@@ -69,10 +69,7 @@ class OdyseusModel(object):
         self.position = starting_point
         self.destination = destination
         self.alpha = starting_alpha
-        if neural_net:
-            self.net = neural_net
-        else:
-            self.net = OdyseusModel.random_net()
+        self.net = neural_net
 
     @staticmethod
     def random_net():
@@ -138,12 +135,23 @@ class OdyseusModel(object):
         self.update_sensors()
         return dx, dy, dalpha
 
+    def fitness(self):
+        distance = self.distance_to_destination()
+        x, y = self.position
+        position_pixel = self.tab[y, x, 0]
+        punishment = 0
+        if position_pixel == 0:
+            punishment = 1000
+        fitness = distance + punishment
+        return fitness
+
+
     def distance_to_destination(self):
         x0, y0 = self.position
         x1, y1 = self.destination
         return np.sqrt((x0 - x1) ** 2 + (y0 - y1) ** 2)
 
-    def step(self, i):
+    def step(self, i=1):
         self.sensors = self.check_sensors()
         self.sensor_array = self.sensors_to_val_array()
         dv, dalpha = self.net_step(i)
@@ -159,6 +167,10 @@ class OdyseusModel(object):
         self.position = self.starting_position
         self.alpha = self.starting_alpha
         return self
+
+    @staticmethod
+    def net_to_numpy(net):
+        pass
 
 
 
